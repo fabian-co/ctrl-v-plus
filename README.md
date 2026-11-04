@@ -15,6 +15,17 @@ Copias una imagen de una página web, de una app o de una captura de pantalla, v
 
 En todos los sistemas, si la imagen trae transparencia, se conserva.
 
+## Funciona con programas de diseño (vectores → PNG)
+
+Funciona con cualquier programa que, al copiar, deje una versión en imagen en el portapapeles, no solo con navegadores. Esto incluye programas **vectoriales**:
+
+- **Adobe Illustrator:** selecciona tus vectores, presiona **Ctrl+C**, ve a una carpeta y pega. Se crea un **PNG con fondo transparente** de lo que copiaste. Probado en Windows con Illustrator 2026: una estrella vectorial de 240 pt quedó como un PNG de 963×916 px.
+- **Photoshop, Figma, PowerPoint, Word, Excel, Paint, la herramienta de Recortes**, capturas de pantalla, etc.: igual. Se guarda lo que el programa ponga como imagen en el portapapeles.
+
+> Ctrl V + guarda la imagen que el programa pone en el portapapeles. La resolución y la transparencia dependen de ese programa. Si necesitas el archivo vectorial (SVG, AI o PDF), usa la exportación del propio programa.
+>
+> En macOS, si el programa solo copia PDF (algunos programas vectoriales lo hacen), Ctrl V + lo convierte a PNG. En ese caso la resolución puede ser menor. Por ahora esto solo se ha probado en Windows.
+
 ## Instalación
 
 Descarga el archivo de tu sistema desde [Releases](../../releases/latest).
