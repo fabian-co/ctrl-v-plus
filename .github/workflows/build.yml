@@ -20,9 +20,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force C:\ahk\v2, C:\ahk\Compiler | Out-Null
-          Invoke-WebRequest https://www.autohotkey.com/download/ahk-v2.zip -OutFile ahk.zip
+          $h = @{ Authorization = "Bearer ${{ github.token }}" }
+          $a = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest -Headers $h
+          $zip = $a.assets | Where-Object name -like '*.zip' | Select-Object -First 1
+          Write-Host "AutoHotkey: $($zip.name)"
+          Invoke-WebRequest $zip.browser_download_url -OutFile ahk.zip
           Expand-Archive ahk.zip C:\ahk\v2 -Force
-          $r = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers @{ Authorization = "Bearer ${{ github.token }}" }
+          if (-not (Test-Path C:\ahk\v2\AutoHotkey64.exe)) { Get-ChildItem C:\ahk\v2 -Recurse | Out-Host; throw "No está AutoHotkey64.exe" }
+          $r = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers $h
           Invoke-WebRequest $r.assets[0].browser_download_url -OutFile ahk2exe.zip
           Expand-Archive ahk2exe.zip C:\ahk\Compiler -Force
 
