@@ -1,0 +1,8 @@
+*.sh        text eol=lf
+*.swift     text eol=lf
+*.plist     text eol=lf
+*.py        text eol=lf
+*.yml       text eol=lf
+linux/ctrlvplus text eol=lf
+*.ahk       text eol=crlf
+*.ps1       text eol=crlf

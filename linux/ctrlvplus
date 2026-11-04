@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Ctrl V + para Linux: guarda la imagen del portapapeles como archivo.
+
+Uso:
+    ctrlvplus pegar [CARPETA|ARCHIVO|file://URI ...]
+        Guarda la imagen del portapapeles en la carpeta indicada (si se da un
+        archivo, en su carpeta; sin argumentos, en la carpeta actual).
+    ctrlvplus hay-imagen      -> código de salida 0 si hay una imagen copiada
+    ctrlvplus --version
+
+Lee el portapapeles con wl-paste (Wayland) o xclip (X11).
+"""
+import datetime
+import os
+import shutil
+import subprocess
+import sys
+from urllib.parse import unquote, urlparse
+
+VERSION = "1.2.0"
+
+# Orden de preferencia: PNG primero (conserva transparencia)
+TIPOS = [
+    ("image/png", ".png"),
+    ("image/jpeg", ".jpg"),
+    ("image/webp", ".webp"),
+    ("image/gif", ".gif"),
+    ("image/bmp", ".bmp"),
+    ("image/x-bmp", ".bmp"),
+    ("image/tiff", ".tiff"),
+    ("image/avif", ".avif"),
+]
+
+
+def _run(cmd, timeout=5):
+    try:
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def backends():
+    orden = []
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
+        orden.append("wayland")
+    if os.environ.get("DISPLAY") and shutil.which("xclip"):
+        orden.append("x11")
+    return orden
+
+
+def tipos_disponibles(backend):
+    if backend == "wayland":
+        r = _run(["wl-paste", "--list-types"])
+    else:
+        r = _run(["xclip", "-selection", "clipboard", "-t", "TARGETS", "-o"])
+    if not r or r.returncode != 0:
+        return []
+    return r.stdout.decode(errors="ignore").split()
+
+
+def leer(backend, mime):
+    if backend == "wayland":
+        r = _run(["wl-paste", "--type", mime], timeout=15)
+    else:
+        r = _run(["xclip", "-selection", "clipboard", "-t", mime, "-o"], timeout=15)
+    if r and r.returncode == 0 and r.stdout:
+        return r.stdout
+    return None
+
+
+def obtener_imagen():
+    """Devuelve (bytes, extensión) o (None, None)."""
+    for b in backends():
+        disp = tipos_disponibles(b)
+        for mime, ext in TIPOS:
+            if mime in disp:
+                datos = leer(b, mime)
+                if datos:
+                    return datos, ext
+    return None, None
+
+
+def hay_imagen():
+    for b in backends():
+        disp = tipos_disponibles(b)
+        if any(m in disp for m, _ in TIPOS):
+            return True
+    return False
+
+
+def resolver_carpeta(args):
+    for a in args:
+        if not a:
+            continue
+        if a.startswith("file://"):
+            a = unquote(urlparse(a).path)
+        a = os.path.abspath(os.path.expanduser(a))
+        if os.path.isdir(a):
+            return a
+        if os.path.exists(a):
+            return os.path.dirname(a)
+    uri = os.environ.get("NAUTILUS_SCRIPT_CURRENT_URI", "")
+    if uri.startswith("file://"):
+        p = unquote(urlparse(uri).path)
+        if os.path.isdir(p):
+            return p
+    return os.getcwd()
+
+
+def ruta_libre(carpeta, ext):
+    base = "Imagen_" + datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    ruta = os.path.join(carpeta, base + ext)
+    n = 2
+    while os.path.exists(ruta):
+        ruta = os.path.join(carpeta, f"{base}_{n}{ext}")
+        n += 1
+    return ruta
+
+
+def avisar(msg, error=False):
+    print(msg, file=sys.stderr if error else sys.stdout)
+    if shutil.which("notify-send") and (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        _run(["notify-send", "-a", "Ctrl V +", "-i",
+              "dialog-error" if error else "image-x-generic", "Ctrl V +", msg], timeout=3)
+
+
+def pegar(args):
+    if not backends():
+        avisar("Falta wl-clipboard (Wayland) o xclip (X11) para leer el portapapeles.", error=True)
+        return 2
+    carpeta = resolver_carpeta(args)
+    datos, ext = obtener_imagen()
+    if not datos:
+        avisar("El portapapeles no tiene una imagen.", error=True)
+        return 1
+    ruta = ruta_libre(carpeta, ext)
+    try:
+        with open(ruta, "wb") as f:
+            f.write(datos)
+    except OSError as e:
+        avisar(f"No se pudo guardar la imagen: {e}", error=True)
+        return 1
+    print(ruta)
+    return 0
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "ayuda"):
+        print(__doc__)
+        return 0
+    if argv[0] in ("--version", "-v"):
+        print(VERSION)
+        return 0
+    if argv[0] == "pegar":
+        return pegar(argv[1:])
+    if argv[0] == "hay-imagen":
+        return 0 if hay_imagen() else 1
+    print(__doc__, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

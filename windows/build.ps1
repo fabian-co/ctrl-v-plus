@@ -1,4 +1,4 @@
-# Compila Ctrl V + y su instalador.
+﻿# Compila Ctrl V + y su instalador.
 # Requiere AutoHotkey v2 y Ahk2Exe (https://github.com/AutoHotkey/Ahk2Exe).
 # Uso:  powershell -ExecutionPolicy Bypass -File build.ps1
 param(
@@ -6,21 +6,21 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$src  = Join-Path $root 'fuente'
-$out  = Join-Path $root 'dist'
+$src  = $root
+$out  = Join-Path (Split-Path $root) 'dist'
 
 $base = Join-Path $AhkDir 'v2\AutoHotkey64.exe'
 $comp = Join-Path $AhkDir 'Compiler\Ahk2Exe.exe'
 if (-not (Test-Path $base)) { $base = "$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe" }
 if (-not (Test-Path $comp)) { $comp = "$env:ProgramFiles\AutoHotkey\Compiler\Ahk2Exe.exe" }
-foreach ($p in $base, $comp) { if (-not (Test-Path $p)) { throw "No se encontró: $p" } }
+foreach ($p in $base, $comp) { if (-not (Test-Path $p)) { throw "No se encontrÃ³: $p" } }
 
 New-Item -ItemType Directory -Force $out | Out-Null
 
 function Compilar($in, $exe) {
     $p = Start-Process $comp -ArgumentList "/in `"$in`" /out `"$exe`" /base `"$base`" /silent" -NoNewWindow -PassThru
     $p.WaitForExit()
-    if (-not (Test-Path $exe)) { throw "Falló la compilación de $in" }
+    if (-not (Test-Path $exe)) { throw "FallÃ³ la compilaciÃ³n de $in" }
 }
 
 # 1) Programa (el instalador lo incrusta con FileInstall desde la carpeta fuente)

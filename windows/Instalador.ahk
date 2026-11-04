@@ -9,7 +9,7 @@
 #SingleInstance Force
 ;@Ahk2Exe-SetName Ctrl V +
 ;@Ahk2Exe-SetDescription Instalador de Ctrl V +
-;@Ahk2Exe-SetVersion 1.1.0
+;@Ahk2Exe-SetVersion 1.2.0
 
 APP      := "Ctrl V +"
 DIR      := EnvGet("LOCALAPPDATA") "\CtrlVPlus"
@@ -73,7 +73,7 @@ Instalar() {
         FileCreateShortcut EXE, LNK, DIR, , "Ctrl V +: pega imágenes como archivo"
 
         RegWrite APP,                       "REG_SZ",    REGKEY, "DisplayName"
-        RegWrite "1.1.0",                   "REG_SZ",    REGKEY, "DisplayVersion"
+        RegWrite "1.2.0",                   "REG_SZ",    REGKEY, "DisplayVersion"
         RegWrite "Ctrl V +",                "REG_SZ",    REGKEY, "Publisher"
         RegWrite EXE,                       "REG_SZ",    REGKEY, "DisplayIcon"
         RegWrite DIR,                       "REG_SZ",    REGKEY, "InstallLocation"

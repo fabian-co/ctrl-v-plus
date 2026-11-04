@@ -1,0 +1,148 @@
+name: Compilar y probar
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Descargar AutoHotkey v2 y Ahk2Exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force C:\ahk\v2, C:\ahk\Compiler | Out-Null
+          Invoke-WebRequest https://www.autohotkey.com/download/ahk-v2.zip -OutFile ahk.zip
+          Expand-Archive ahk.zip C:\ahk\v2 -Force
+          $r = Invoke-RestMethod https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest -Headers @{ Authorization = "Bearer ${{ github.token }}" }
+          Invoke-WebRequest $r.assets[0].browser_download_url -OutFile ahk2exe.zip
+          Expand-Archive ahk2exe.zip C:\ahk\Compiler -Force
+
+      - name: Validar scripts
+        shell: pwsh
+        run: |
+          foreach ($s in 'windows\CtrlVPlus.ahk', 'windows\Instalador.ahk') {
+            & C:\ahk\v2\AutoHotkey64.exe /ErrorStdOut /validate $s | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Error de sintaxis en $s" }
+          }
+
+      - name: Compilar
+        shell: pwsh
+        run: |
+          .\windows\build.ps1 -AhkDir C:\ahk
+          Copy-Item "dist\Instalar Ctrl V +.exe" "dist\CtrlVPlus-Windows-Setup.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/CtrlVPlus-Windows-Setup.exe
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar Info.plist
+        run: plutil -lint macos/Info.plist
+
+      - name: Compilar
+        run: bash macos/build.sh
+
+      - name: Probar "pegar imagen" (portapapeles -> archivo)
+        run: |
+          set -euxo pipefail
+          python3 .github/png_prueba.py /tmp/prueba.png
+          osascript -e 'set the clipboard to (read (POSIX file "/tmp/prueba.png") as «class PNGf»)'
+          mkdir -p /tmp/salida /tmp/app
+          ditto -x -k dist/CtrlVPlus-macOS.zip /tmp/app
+          BIN=/tmp/app/CtrlVPlus-macOS/CtrlVPlus.app/Contents/MacOS/CtrlVPlus
+          lipo -archs "$BIN"
+          codesign --verify --verbose "/tmp/app/CtrlVPlus-macOS/CtrlVPlus.app"
+          "$BIN" --pegar /tmp/salida
+          ls -l /tmp/salida
+          test -s /tmp/salida/Imagen_*.png
+          # Con texto en el portapapeles no debe crear nada
+          printf hola | pbcopy
+          if "$BIN" --pegar /tmp/salida; then echo "No debía pegar texto"; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/CtrlVPlus-macOS.zip
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias de prueba
+        run: sudo apt-get update && sudo apt-get install -y xclip xvfb shellcheck
+
+      - name: Revisar código
+        run: |
+          python3 -m py_compile linux/ctrlvplus linux/integraciones/ctrlvplus_nautilus.py
+          shellcheck -s sh linux/install.sh linux/uninstall.sh
+          shellcheck macos/build.sh macos/install.sh macos/uninstall.sh
+
+      - name: Probar "pegar imagen" con X11 (xclip)
+        run: |
+          python3 .github/png_prueba.py /tmp/prueba.png
+          mkdir -p /tmp/salida
+          xvfb-run -a sh -eux -c '
+            xclip -selection clipboard -t image/png -i /tmp/prueba.png
+            sleep 1
+            linux/ctrlvplus hay-imagen
+            linux/ctrlvplus pegar /tmp/salida
+            cmp /tmp/salida/Imagen_*.png /tmp/prueba.png
+            printf hola | xclip -selection clipboard
+            sleep 1
+            if linux/ctrlvplus hay-imagen; then echo "No debía detectar imagen"; exit 1; fi
+          '
+
+      - name: Probar instalador y desinstalador
+        run: |
+          export HOME="$(mktemp -d)"
+          sh linux/install.sh
+          test -x "$HOME/.local/bin/ctrlvplus"
+          sh linux/uninstall.sh
+          test ! -e "$HOME/.local/bin/ctrlvplus"
+
+      - name: Empaquetar
+        run: |
+          mkdir -p dist/CtrlVPlus-Linux
+          cp -r linux/ctrlvplus linux/integraciones linux/install.sh linux/uninstall.sh dist/CtrlVPlus-Linux/
+          chmod +x dist/CtrlVPlus-Linux/ctrlvplus dist/CtrlVPlus-Linux/*.sh
+          tar -C dist -czf dist/CtrlVPlus-Linux.tar.gz CtrlVPlus-Linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/CtrlVPlus-Linux.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+          merge-multiple: true
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artefactos/* \
+            --title "Ctrl V + ${GITHUB_REF_NAME#v}" \
+            --notes-file .github/notas-release.md

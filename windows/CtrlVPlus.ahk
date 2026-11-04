@@ -18,7 +18,7 @@
 #SingleInstance Off
 ;@Ahk2Exe-SetName Ctrl V +
 ;@Ahk2Exe-SetDescription Ctrl V + : pega imágenes como archivo
-;@Ahk2Exe-SetVersion 1.1.0
+;@Ahk2Exe-SetVersion 1.2.0
 
 global CF_BITMAP := 2
 global CF_DIB    := 8
